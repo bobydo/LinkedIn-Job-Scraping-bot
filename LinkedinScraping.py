@@ -32,7 +32,7 @@ class LinkedinScraper:
         last_height = self.driver.execute_script("return document.body.scrollHeight")
         while True:
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(5)
+            time.sleep(5)  # Wait for new content to load
             new_height = self.driver.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
@@ -84,10 +84,20 @@ class LinkedinScraper:
             job_link_list.append(job_link)
             # Extract page text from job link and save to Requirements
             if job_link:
-                requirements_text = extractor.extract_page_text(job_link)
-                requirements_list.append(requirements_text)
+                # Open job link in the current window
+                self.driver.execute_script("window.open(arguments[0]);", job_link)
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                time.sleep(5)  # Wait for page to load
+
+                # Extract 'About the job' section
+                print(f"[DEBUG] job_link before call = {job_link}")
+                requirements_text = extractor.extract_about_the_job(self.driver, job_link=job_link)
+
+                self.driver.close()
+                self.driver.switch_to.window(self.driver.window_handles[0])
             else:
-                requirements_list.append("")
+                requirements_text = ""
+            requirements_list.append(requirements_text)
         self.job_data = pd.DataFrame({
             'Title': job_title_list,
             'Company': company_name_list,
@@ -96,6 +106,7 @@ class LinkedinScraper:
             'Link': job_link_list,
             'Requirements': requirements_list
         })
+        time.sleep(2)  # Wait 2 seconds between jobs (adjust as needed)
 
     def clean_data(self):
         if self.job_data is not None:
@@ -104,8 +115,6 @@ class LinkedinScraper:
     def save_to_csv(self):
         if self.job_data is not None:
             self.job_data.to_csv(self.output_csv_path, mode='a', index=False, header=not os.path.exists(self.output_csv_path))
-
-
 
     def close(self):
         if self.driver:
