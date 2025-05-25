@@ -1,0 +1,11 @@
+selenium
+pandas
+gspread
+gspread-dataframe
+google-auth
+pydrive2
+beautifulsoup4
+requests
+numpy
+
+pyodbc
