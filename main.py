@@ -1,4 +1,5 @@
 from LinkedinScraping import LinkedinScraper
+import datetime
 
 def build_linkedin_url(role, location):
     geo_ids = {
@@ -15,16 +16,16 @@ def build_linkedin_url(role, location):
 if __name__ == "__main__":
     # Download url https://googlechromelabs.github.io/chrome-for-testing/#stable
     chrome_driver_path = "D:\\chromedriver-win64\\chromedriver.exe"
-    output_csv_path = "output.csv"  # Optional: keep CSV output
+    now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_csv_path = f"output_{now_str}.csv"
 
     role = "Data Analyst"
     locations = ["Canada", "United States"]
 
-    scraper = LinkedinScraper(
-        chrome_driver_path=chrome_driver_path,
-        output_csv_path=output_csv_path
-    )
-
     for location in locations:
         linkedin_url = build_linkedin_url(role, location)
+        scraper = LinkedinScraper(
+            chrome_driver_path=chrome_driver_path,
+            output_csv_path=output_csv_path
+        )
         scraper.run(linkedin_url)

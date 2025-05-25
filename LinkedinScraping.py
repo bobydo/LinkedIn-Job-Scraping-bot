@@ -6,10 +6,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import pyodbc
-
-# Import the extractor
 from desc_extract import JobDescriptionExtractor
+from db_services import DBServices
 
 class LinkedinScraper:
     def __init__(self, chrome_driver_path, output_csv_path=None):
@@ -20,36 +18,8 @@ class LinkedinScraper:
 
     def save_to_sqlserver(self):
         if self.job_data is not None:
-            conn_str = (
-                r'DRIVER={ODBC Driver 17 for SQL Server};'
-                r'SERVER=DESKTOP-ENHKM1F\SQLEXPRESS;'
-                r'DATABASE=LinkedIn-Job-Scraping-bot;'
-                r'Trusted_Connection=yes;'
-            )
-            conn = pyodbc.connect(conn_str)
-            cursor = conn.cursor()
-            # Create table if not exists
-            cursor.execute('''
-                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Linkedin_Jobdata' AND xtype='U')
-                CREATE TABLE Linkedin_Jobdata (
-                    Id INT IDENTITY(1,1) PRIMARY KEY,
-                    Title NVARCHAR(255),
-                    Company NVARCHAR(255),
-                    Location NVARCHAR(255),
-                    Last_Posting_Date NVARCHAR(50),
-                    Link NVARCHAR(500)
-                )
-            ''')
-            conn.commit()
-            # Insert data
-            for _, row in self.job_data.iterrows():
-                cursor.execute('''
-                    INSERT INTO Linkedin_Jobdata (Title, Company, Location, Last_Posting_Date, Link)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', row['Title'], row['Company'], row['Location'], row['Last_Posting_Date'], row['Link'])
-            conn.commit()
-            cursor.close()
-            conn.close()
+            db = DBServices()
+            db.save_to_sqlserver(self.job_data)
 
     def setup_driver(self, url):
         s = Service(self.chrome_driver_path)
@@ -99,34 +69,12 @@ class LinkedinScraper:
             location = None
             date_time = None
             job_link = None
-            job_desc = None
             try:
                 job_title = job.find_element(By.CSS_SELECTOR, 'h3').get_attribute('innerText')
                 company_name = job.find_element(By.CSS_SELECTOR, 'h4').get_attribute('innerText')
                 location = job.find_element(By.CLASS_NAME, 'job-search-card__location').get_attribute('innerText')
                 date_time = job.find_element(By.CSS_SELECTOR, 'time').get_attribute('datetime')
                 job_link = job.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
-                # Try to get job description from job link
-                if job_link:
-                    try:
-                        self.driver.execute_script("window.open(arguments[0]);", job_link)
-                        self.driver.switch_to.window(self.driver.window_handles[-1])
-                        time.sleep(3)
-                        desc_elem = None
-                        try:
-                            desc_elem = self.driver.find_element(By.CLASS_NAME, 'description__text')
-                        except Exception:
-                            pass
-                        if desc_elem:
-                            job_desc = desc_elem.text
-                        else:
-                            job_desc = ""
-                        self.driver.close()
-                        self.driver.switch_to.window(self.driver.window_handles[0])
-                    except Exception:
-                        job_desc = ""
-                else:
-                    job_desc = ""
             except Exception:
                 pass
             job_title_list.append(job_title)
@@ -134,10 +82,10 @@ class LinkedinScraper:
             location_list.append(location)
             date_time_list.append(date_time)
             job_link_list.append(job_link)
-            # Extract requirements using NLP
-            if job_desc:
-                reqs = extractor.extract_requirements(job_desc)
-                requirements_list.append(" | ".join(reqs))
+            # Extract page text from job link and save to Requirements
+            if job_link:
+                requirements_text = extractor.extract_page_text(job_link)
+                requirements_list.append(requirements_text)
             else:
                 requirements_list.append("")
         self.job_data = pd.DataFrame({

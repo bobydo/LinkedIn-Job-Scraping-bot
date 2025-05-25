@@ -1,28 +1,25 @@
-import re
-import spacy
+import requests
+from bs4 import BeautifulSoup
 
 class JobDescriptionExtractor:
     def __init__(self):
-        # Load spaCy English model
-        self.nlp = spacy.load("en_core_web_sm")
-        self.patterns = [
-            r"\d+[-+]?\s*years? experience",
-            r"proficiency in [\w, ]+",
-            r"degree in [\w, ]+",
-            r"experience with [\w, ]+",
-            r"strong [\w ]+ knowledge",
-            r"expertise in [\w, ]+",
-            r"ability to [\w, ]+",
-            r"comfortable [\w, ]+",
-            r"prior experience [\w, ]+",
-            r"good understanding of [\w, ]+"
-        ]
+        pass
 
-    def extract_requirements(self, text):
-        doc = self.nlp(text)
-        requirements = []
-        for sent in doc.sents:
-            for pat in self.patterns:
-                if re.search(pat, sent.text, re.IGNORECASE):
-                    requirements.append(sent.text.strip())
-        return requirements
+    def extract_page_text(self, url):
+        """
+        Fetches the main visible text content from a web page (without any pattern filtering).
+        Returns the extracted text as a string.
+        """
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.decompose()
+            # Get text and clean up
+            text = soup.get_text(separator='\n')
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            return '\n'.join(lines)
+        except Exception as e:
+            return f"Error fetching or parsing {url}: {e}"
