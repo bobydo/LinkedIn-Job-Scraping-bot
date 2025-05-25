@@ -6,8 +6,10 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
 import pyodbc
+
+# Import the extractor
+from desc_extract import JobDescriptionExtractor
 
 class LinkedinScraper:
     def __init__(self, chrome_driver_path, output_csv_path=None):
@@ -89,18 +91,42 @@ class LinkedinScraper:
         location_list = []
         date_time_list = []
         job_link_list = []
+        requirements_list = []
+        extractor = JobDescriptionExtractor()
         for job in job_lists:
             job_title = None
             company_name = None
             location = None
             date_time = None
             job_link = None
+            job_desc = None
             try:
                 job_title = job.find_element(By.CSS_SELECTOR, 'h3').get_attribute('innerText')
                 company_name = job.find_element(By.CSS_SELECTOR, 'h4').get_attribute('innerText')
                 location = job.find_element(By.CLASS_NAME, 'job-search-card__location').get_attribute('innerText')
                 date_time = job.find_element(By.CSS_SELECTOR, 'time').get_attribute('datetime')
                 job_link = job.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
+                # Try to get job description from job link
+                if job_link:
+                    try:
+                        self.driver.execute_script("window.open(arguments[0]);", job_link)
+                        self.driver.switch_to.window(self.driver.window_handles[-1])
+                        time.sleep(3)
+                        desc_elem = None
+                        try:
+                            desc_elem = self.driver.find_element(By.CLASS_NAME, 'description__text')
+                        except Exception:
+                            pass
+                        if desc_elem:
+                            job_desc = desc_elem.text
+                        else:
+                            job_desc = ""
+                        self.driver.close()
+                        self.driver.switch_to.window(self.driver.window_handles[0])
+                    except Exception:
+                        job_desc = ""
+                else:
+                    job_desc = ""
             except Exception:
                 pass
             job_title_list.append(job_title)
@@ -108,12 +134,19 @@ class LinkedinScraper:
             location_list.append(location)
             date_time_list.append(date_time)
             job_link_list.append(job_link)
+            # Extract requirements using NLP
+            if job_desc:
+                reqs = extractor.extract_requirements(job_desc)
+                requirements_list.append(" | ".join(reqs))
+            else:
+                requirements_list.append("")
         self.job_data = pd.DataFrame({
             'Title': job_title_list,
             'Company': company_name_list,
             'Location': location_list,
             'Last_Posting_Date': date_time_list,
-            'Link': job_link_list
+            'Link': job_link_list,
+            'Requirements': requirements_list
         })
 
     def clean_data(self):
